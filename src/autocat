@@ -1,0 +1,61 @@
+#!/usr/bin/python
+
+import re
+import yaml
+from pprint import pprint
+from piecash import open_book, ledger, Split
+
+
+def read_config(fn):
+    '''Read in the yaml config file.'''
+
+    with open(fn, "r") as stream:
+        try:
+            config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+
+    return config
+
+def main():
+    
+    config = read_config('fixes.yaml')
+    re_list = list()
+
+    with open_book('gc_test.gnucash', readonly=False) as mybook:
+
+        for payee_t in config:
+            payee_t['orig_regex_comp'] = re.compile(payee_t['orig_regex'])
+            payee_t['imbalance_new_account_t'] = mybook.accounts.get(fullname=payee_t['imbalance_new_account'])
+        pprint(config)
+        exit()
+
+        utilities = mybook.accounts.get(fullname='Expenses:Utilities')
+        for transaction in mybook.transactions:
+
+            found_match = False
+            
+
+            if ('DYNAMIC' in transaction.description):
+                transaction.description = 'Dynamic Catholic'
+            if ('FORTCOLUTIL' in transaction.description):
+                transaction.description = 'Fort Collins Utilities'
+                print(transaction.description)
+                print(transaction.splits)
+                sps = list()
+                
+                for sp in transaction.splits:
+                    if 'Imbalance' in sp.account.name:
+                        print('found split')
+                        sp.account = utilities
+                    sps.append(sp)
+                transaction.splits = sps
+
+        mybook.flush()
+
+#    print(ledger(mybook))
+
+        mybook.save()
+
+if __name__ == '__main__':
+    main()
