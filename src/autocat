@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import argparse
 import re
 import yaml
 from pprint import pprint
@@ -17,28 +18,37 @@ def read_config(fn):
 
     return config
 
+
 def modify_description(transaction, new_description):
     '''Change the transaction to have the new description (payee).'''
     transaction.description = new_description
 
     return transaction
 
+
 def modify_category(transaction, new_account):
     '''Change the transaction to thave the new category (like 'charity').'''
-    
+
     sps = list()
-    
+
     for sp in transaction.splits:
         if 'Imbalance' in sp.account.name:
-            print('found split')
+            #            print('found split')
             sp.account = new_account
         sps.append(sp)
     transaction.splits = sps
 
     return transaction
 
+
 def main():
-    
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c,--config', default='config/payee_list.yaml')
+    parser.add_argument('-g,--gnucashfile', default='test/gc_test.gnucash')
+
+    args = parser.parse_args()
+
     replacement_list = read_config('config/payee_list.yaml')
     re_list = list()
 
@@ -46,11 +56,11 @@ def main():
 
         for payee_t in replacement_list:
             payee_t['orig_regex_comp'] = re.compile(payee_t['orig_regex'])
-            payee_t['imbalance_new_account_t'] = mybook.accounts.get(fullname=payee_t['imbalance_new_account'])
+            payee_t['imbalance_new_account_t'] = mybook.accounts.get(
+                fullname=payee_t['imbalance_new_account'])
 #        pprint(replacement_list)
 #        pprint('-' * 80)
- 
- 
+
         utilities = mybook.accounts.get(fullname='Expenses:Utilities')
 
         # For each transaction, go through the list.
@@ -63,9 +73,8 @@ def main():
 #            pprint(transaction.splits)
 
             for replacement in replacement_list:
-                
-#                pprint(replacement['orig_regex_comp'])
-                
+
+                #                pprint(replacement['orig_regex_comp'])
 
                 if (replacement['orig_regex_comp'].search(transaction.description)):
                     # Now, the transaction matches the regex
@@ -73,12 +82,12 @@ def main():
 #                    pprint ('found replacement: before:')
 #                    pprint(transaction.description)
 #                    pprint(transaction.splits)
-                    
 
                     modify_description(transaction, replacement['payee'])
- 
+
                     if replacement['imbalance_new_account_t']:
-                        modify_category(transaction, replacement['imbalance_new_account_t'])
+                        modify_category(
+                            transaction, replacement['imbalance_new_account_t'])
 
 #                    print('replacement')
 #                    pprint(replacement)
@@ -89,12 +98,13 @@ def main():
 
                     # bail out of for loop if found a match
                     continue
-                    
+
         mybook.flush()
 
 #    print(ledger(mybook))
 
         mybook.save()
+
 
 if __name__ == '__main__':
     main()
