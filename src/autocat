@@ -17,40 +17,79 @@ def read_config(fn):
 
     return config
 
+def modify_description(transaction, new_description):
+    '''Change the transaction to have the new description (payee).'''
+    transaction.description = new_description
+
+    return transaction
+
+def modify_category(transaction, new_account):
+    '''Change the transaction to thave the new category (like 'charity').'''
+    
+    sps = list()
+    
+    for sp in transaction.splits:
+        if 'Imbalance' in sp.account.name:
+            print('found split')
+            sp.account = new_account
+        sps.append(sp)
+    transaction.splits = sps
+
+    return transaction
+
 def main():
     
-    config = read_config('fixes.yaml')
+    replacement_list = read_config('config/payee_list.yaml')
     re_list = list()
 
-    with open_book('gc_test.gnucash', readonly=False) as mybook:
+    with open_book('test/gc_test.gnucash', readonly=False) as mybook:
 
-        for payee_t in config:
+        for payee_t in replacement_list:
             payee_t['orig_regex_comp'] = re.compile(payee_t['orig_regex'])
             payee_t['imbalance_new_account_t'] = mybook.accounts.get(fullname=payee_t['imbalance_new_account'])
-        pprint(config)
-        exit()
-
+#        pprint(replacement_list)
+#        pprint('-' * 80)
+ 
+ 
         utilities = mybook.accounts.get(fullname='Expenses:Utilities')
+
+        # For each transaction, go through the list.
+
         for transaction in mybook.transactions:
 
             found_match = False
-            
+#            pprint('-' * 90)
+#            pprint(transaction.description)
+#            pprint(transaction.splits)
 
-            if ('DYNAMIC' in transaction.description):
-                transaction.description = 'Dynamic Catholic'
-            if ('FORTCOLUTIL' in transaction.description):
-                transaction.description = 'Fort Collins Utilities'
-                print(transaction.description)
-                print(transaction.splits)
-                sps = list()
+            for replacement in replacement_list:
                 
-                for sp in transaction.splits:
-                    if 'Imbalance' in sp.account.name:
-                        print('found split')
-                        sp.account = utilities
-                    sps.append(sp)
-                transaction.splits = sps
+#                pprint(replacement['orig_regex_comp'])
+                
 
+                if (replacement['orig_regex_comp'].search(transaction.description)):
+                    # Now, the transaction matches the regex
+                    found_match = True
+#                    pprint ('found replacement: before:')
+#                    pprint(transaction.description)
+#                    pprint(transaction.splits)
+                    
+
+                    modify_description(transaction, replacement['payee'])
+ 
+                    if replacement['imbalance_new_account_t']:
+                        modify_category(transaction, replacement['imbalance_new_account_t'])
+
+#                    print('replacement')
+#                    pprint(replacement)
+#                    print('after:')
+#                    pprint(transaction)
+#                    pprint(transaction.splits)
+#                    exit()
+
+                    # bail out of for loop if found a match
+                    continue
+                    
         mybook.flush()
 
 #    print(ledger(mybook))
