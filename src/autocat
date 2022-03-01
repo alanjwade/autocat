@@ -3,11 +3,21 @@
 import argparse
 import re
 import yaml
+import csv
 from pprint import pprint
 from piecash import open_book, ledger, Split
 
 
 def read_config(fn):
+
+    retval = False
+    if fn.endswith('.yaml'):
+        retval = read_yaml(fn)
+    elif fn.endswith('.csv'):
+        retval = read_csv(fn)
+    return retval
+
+def read_yaml(fn):
     '''Read in the yaml config file.'''
 
     with open(fn, "r") as stream:
@@ -17,6 +27,15 @@ def read_config(fn):
             print(exc)
 
     return config
+
+def read_csv(fn):
+    '''Read from a CSV.'''
+    with open(fn) as f:
+        reader = csv.DictReader(f)
+        config = list(reader)
+        
+    return config
+
 
 
 def modify_description(transaction, new_description):

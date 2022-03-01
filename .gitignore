@@ -1,5 +1,5 @@
 /autocat.code-workspace
-/config/payee_list.yaml
+/config/*
 /test/gc_test.gnucash
 /test/gc_test.*.gnucash
 *.log
