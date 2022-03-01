@@ -44,15 +44,17 @@ def modify_category(transaction, new_account):
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c,--config', default='config/payee_list.yaml')
-    parser.add_argument('-g,--gnucashfile', default='test/gc_test.gnucash')
+    parser.add_argument('-c','--config', default='config/payee_list.yaml',
+        help='The yaml replacement config file.')
+    parser.add_argument('-g','--gnucashfile', default='test/gc_test.gnucash',
+        help='The .gnucash file to operate on.')
 
     args = parser.parse_args()
 
-    replacement_list = read_config('config/payee_list.yaml')
+    replacement_list = read_config(args.config)
     re_list = list()
 
-    with open_book('test/gc_test.gnucash', readonly=False) as mybook:
+    with open_book(args.gnucashfile, readonly=False) as mybook:
 
         for payee_t in replacement_list:
             payee_t['orig_regex_comp'] = re.compile(payee_t['orig_regex'])
