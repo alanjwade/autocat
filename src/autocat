@@ -17,6 +17,7 @@ def read_config(fn):
         retval = read_csv(fn)
     return retval
 
+
 def read_yaml(fn):
     '''Read in the yaml config file.'''
 
@@ -28,14 +29,14 @@ def read_yaml(fn):
 
     return config
 
+
 def read_csv(fn):
     '''Read from a CSV.'''
     with open(fn) as f:
         reader = csv.DictReader(f)
         config = list(reader)
-        
-    return config
 
+    return config
 
 
 def modify_description(transaction, new_description):
@@ -63,10 +64,10 @@ def modify_category(transaction, new_account):
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c','--config', default='config/payee_list.yaml',
-        help='The yaml replacement config file.')
-    parser.add_argument('-g','--gnucashfile', default='test/gc_test.gnucash',
-        help='The .gnucash file to operate on.')
+    parser.add_argument('-c', '--config', default='config/payee_list.yaml',
+                        help='The yaml replacement config file.')
+    parser.add_argument('-g', '--gnucashfile', default='test/gc_test.gnucash',
+                        help='The .gnucash file to operate on.')
 
     args = parser.parse_args()
 
@@ -90,12 +91,13 @@ def main():
 
             found_match = False
 #            pprint('-' * 90)
-#            pprint(transaction.description)
+#            if 'Education' in transaction.description:
+#                pprint(transaction.description)
 #            pprint(transaction.splits)
 
             for replacement in replacement_list:
 
-                #                pprint(replacement['orig_regex_comp'])
+                #pprint(replacement['orig_regex_comp'])
 
                 if (replacement['orig_regex_comp'].search(transaction.description)):
                     # Now, the transaction matches the regex
@@ -104,7 +106,8 @@ def main():
 #                    pprint(transaction.description)
 #                    pprint(transaction.splits)
 
-                    modify_description(transaction, replacement['payee'])
+                    if replacement['payee'] != '':
+                        modify_description(transaction, replacement['payee'])
 
                     if replacement['imbalance_new_account_t']:
                         modify_category(
