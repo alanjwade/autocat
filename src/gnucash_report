@@ -1,0 +1,223 @@
+#!/usr/bin/python
+
+import argparse
+import re
+import yaml
+import csv
+import os
+from pprint import pprint
+from piecash import open_book, ledger, Split
+from decimal import Decimal
+from datetime import datetime, date, timedelta
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
+
+
+fields = [
+    "DATE",
+    "TRANSACTION VALUE",
+    "DEBIT/CREDIT INDICATOR",
+    "ACCOUNT",
+    "ACCOUNT CODE",
+    "CONTRA ACCOUNT",
+    "CONTRA ACCOUNT CODE",
+    "ENTRY TEXT",
+]
+
+class Transaction:
+    def __init__(self, date, amount, description, category, account):
+        self.date = date
+        self.datestr = date.strftime('%Y-%m-%d')
+        self.amount = amount
+        self.description = description
+        self.category = category
+        self.account = account
+        self.ym = yearmonth(date)
+
+    def __str__(self):
+        return f"Transaction(date='{self.date}', amount='{self.amount}', description='{self.description}'"
+        " category='{self.category}', account='{self.account}')"
+
+# transaction = Transaction(datetime.datetime(2024, 7, 12), 100.50, "Salary deposit", "income", "checking")
+
+
+def main():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', default='config/payee_list.yaml',
+                        help='The yaml replacement config file.')
+    parser.add_argument('-g', '--gnucashfile', default='test/gc_test.gnucash',
+                        help='The .gnucash file to operate on.')
+    parser.add_argument('-s', '--start', default='2023-07-01',
+                        help='The start date for the report')
+    parser.add_argument('-e', '--end', default='2024-06-30',
+                        help='The end date for the report')
+    parser.add_argument('-f', '--filename', default='monthly_report.xlsx',
+                        help='The output spreadsheet')
+
+    args = parser.parse_args()
+
+    all_transactions = list()
+
+    count = 0
+
+    with open_book(args.gnucashfile, readonly=True, open_if_lock=True) as mybook:
+        for transaction in mybook.transactions:
+            split_one, split_two = transaction.splits
+            # pprint(split_one.account.fullname)
+            # pprint(split_one.account.description)
+            # exit()
+            if    "Expenses" in str(split_one.account.fullname) \
+               or "Income" in str(split_one.account.fullname) \
+               or "Imbalance" in str(split_one.account.fullname):
+                cat_split = split_one
+                account_split = split_two
+            else:
+                cat_split = split_two
+                account_split = split_one
+
+            
+
+            new_txn = Transaction(transaction.post_date,
+                                  cat_split.value * Decimal('-1'),
+                                  transaction.description,
+                                  cat_split.account.fullname,
+                                  account_split.account.fullname)
+
+            all_transactions.append(new_txn)
+
+    report_trans = dict()
+
+    for t in all_transactions:
+        if     t.date >= datetime.strptime(args.start, '%Y-%m-%d').date() \
+           and t.date <= datetime.strptime(args.end, '%Y-%m-%d').date():
+
+            if t.ym not in report_trans.keys():
+                report_trans[t.ym] = list()
+
+            report_trans[t.ym].append(t)
+
+
+    # pprint (report_trans)
+
+    write_report_spreadsheet(args.filename, report_trans)
+
+def get_cell_name(row_number, column_number):
+  """
+  This function takes a column number and a row number and returns the 
+  corresponding cell name (e.g., 'A1', 'C23').
+  """
+  # Convert column number to its letter representation
+  column_letter = get_column_letter(column_number)
+  # Combine column letter and row number for cell name
+  cell_name = f"{column_letter}{row_number}"
+  return cell_name
+
+def write_report_spreadsheet(fn, report_trans):
+    '''Writes the spreadsheet report. fn is the SS filename, report_trans are the transactions.'''
+
+    wb = Workbook()
+    ws = wb.active
+
+    ws.title = 'Report'
+
+    row = 1
+    col = 1
+
+    report_cat = dict()
+
+    for ym in sorted(report_trans.keys()):
+
+        if ym not in report_cat.keys():
+            report_cat[ym] = list()
+
+        start_row = row
+
+        for t in sorted(report_trans[ym], key=lambda t: t.date):
+
+            ws.cell(row=row, column=1, value=t.datestr)
+            ws.cell(row=row, column=2, value=t.description)
+            ws.cell(row=row, column=3, value=t.category)
+            ws.cell(row=row, column=4, value=t.account)
+
+            if t.amount >= 0:
+                ws.cell(row=row, column=5, value=t.amount)
+            else:
+                ws.cell(row=row, column=6, value=t.amount)
+
+            
+            
+            row = row+1
+        ws.cell(row=row, column=4, value='Subtotal for {}'.format(ym))
+        ws.cell(row=row, column=5, value='=SUM({}:{})'.format(get_cell_name(start_row, 5), get_cell_name(row-1, 5)))
+        ws.cell(row=row, column=6, value='=SUM({}:{})'.format(get_cell_name(start_row, 6), get_cell_name(row-1, 6)))
+        ws.cell(row=row, column=7, value='=SUM({}:{})'.format(get_cell_name(row, 5), get_cell_name(row, 6)))
+        ws.cell(row=row, column=7).number_format = '$#,##0.00'
+
+        row = row + 2
+
+    # set_column_autowidth(ws, [1])
+    # set_column_autowidth(ws, [2])
+    # set_column_autowidth(ws, [3])
+    # set_column_autowidth(ws, [4])
+    # column_dim = ws.column_dimensions['B']
+    # column_dim.bestFit = True
+
+    for column_cells in ws.columns:
+        new_column_length = max(len(str(cell.value)) for cell in column_cells)
+        new_column_letter = (get_column_letter(column_cells[0].column))
+        if new_column_length > 0:
+            ws.column_dimensions[new_column_letter].width = new_column_length*1.1
+
+    ws.column_dimensions[get_column_letter(5)].number_format = '$#,##0.00'
+    ws.column_dimensions[get_column_letter(6)].number_format = '$#,##0.00'
+
+
+    wb.save(fn)
+
+def set_column_autowidth(ws, columns):
+  """
+  This function takes a worksheet and a list of column letters (e.g., ['A', 'C', 'E']) 
+  and sets auto-width for those columns.
+  """
+  for col_number in columns:
+    column_dim = ws.column_dimensions[get_column_letter(col_number)]
+    column_dim.bestFit = True  # This is the same as column_dim.auto_size = True
+
+
+def yearmonth(dt):
+    return dt.strftime('%Y-%m')
+
+def get_unique_months(start_date, end_date):
+  """
+  This function takes a start and end date (inclusive) and returns a unique 
+  ordered list of the months within that date range.
+  """
+  # Ensure start_date is before or equal to end_date
+  if start_date > end_date:
+    start_date, end_date = end_date, start_date
+
+  # Create an empty set to store unique months
+  months = set()
+  current_date = start_date
+
+  # Iterate through dates between start and end (inclusive)
+  while current_date <= end_date:
+    # Add the month (as integer 1-12) to the set
+    months.add(current_date.month)
+    # Move to the first day of the next month
+    current_date += timedelta(days = (calendar.monthrange(current_date.year, current_date.month)[1] + 1))
+
+  # Convert the set back to a sorted list
+  return sorted(months)
+
+# Example usage
+# start_date = date(2023, 6, 15)  # June 15th, 2023
+# end_date = date(2024, 2, 29)  # February 29th, 2024 (leap year)
+
+# unique_months = get_unique_months(start_date, end_date)
+# print(unique_months)  # Output: [6, 7, 8, 9, 10, 11, 12, 1, 2]
+
+
+if __name__ == '__main__':
+    main()

@@ -4,6 +4,7 @@ import argparse
 import re
 import yaml
 import csv
+import os
 from pprint import pprint
 from piecash import open_book, ledger, Split
 
@@ -60,6 +61,17 @@ def modify_category(transaction, new_account):
 
     return transaction
 
+def add_memo(transaction, account_name, memo):
+
+    sps = list()
+
+    for sp in transaction.splits:
+        print("found discover, acoount = {}:{}:{}:".format(sp.account.fullname, account_name, memo))
+        if sp.account.fullname == account_name:
+            if memo not in sp.memo:
+                sp.memo = sp.memo + memo
+                print('changing memo to {}'.format(memo))
+
 
 def main():
 
@@ -74,14 +86,16 @@ def main():
     replacement_list = read_config(args.config)
     re_list = list()
 
+
     with open_book(args.gnucashfile, readonly=False) as mybook:
 
         for payee_t in replacement_list:
             payee_t['orig_regex_comp'] = re.compile(payee_t['orig_regex'])
             payee_t['imbalance_new_account_t'] = mybook.accounts.get(
                 fullname=payee_t['imbalance_new_account'])
-#        pprint(replacement_list)
+        # pprint(replacement_list)
 #        pprint('-' * 80)
+        # exit()
 
         utilities = mybook.accounts.get(fullname='Expenses:Utilities')
 
@@ -112,6 +126,12 @@ def main():
                     if replacement['imbalance_new_account_t']:
                         modify_category(
                             transaction, replacement['imbalance_new_account_t'])
+
+                # Now the description is fixed
+                if transaction.description == replacement['payee']:
+                    # here, the 'Discover' in the gnucash DB is the 'Discover' in the csv
+                    if replacement['memo']:
+                        add_memo(transaction, replacement['imbalance_new_account'], replacement['memo'])
 
 #                    print('replacement')
 #                    pprint(replacement)
